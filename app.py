@@ -11,6 +11,7 @@ BaseOptions = mp.tasks.BaseOptions
 PoseLandmarker = mp.tasks.vision.PoseLandmarker
 PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
 VisionRunningMode = mp.tasks.vision.RunningMode
+POSE_CONNECTIONS = mp.tasks.vision.PoseLandmarksConnections.POSE_LANDMARKS
 
 options = PoseLandmarkerOptions(
     base_options=BaseOptions(model_asset_path=config.model_path),
@@ -36,7 +37,7 @@ with PoseLandmarker.create_from_options(options) as landmarker:
     if fps == 0:  # seguridad si la cámara no da fps
         fps = 30
 
-    mp_pose = mp.solutions.pose
+    
 
     frame_ms = int(1000 / fps)
 
@@ -79,10 +80,9 @@ with PoseLandmarker.create_from_options(options) as landmarker:
                 h, w, _ = frame.shape
 
                 # Dibuja líneas entre los landmarks
-                for connection in mp_pose.POSE_CONNECTIONS:
-                    start_idx, end_idx = connection
-                    start = person_landmarks[start_idx]
-                    end = person_landmarks[end_idx]
+                for connection in POSE_CONNECTIONS:
+                    start = person_landmarks[connection.start]
+                    end = person_landmarks[connection.end]
 
                     x1, y1 = int(start.x * w), int(start.y * h)
                     x2, y2 = int(end.x * w), int(end.y * h)

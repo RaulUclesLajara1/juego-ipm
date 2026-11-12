@@ -15,7 +15,7 @@ kiwisolver==1.4.9
 markdown-it-py==4.0.0
 matplotlib==3.10.7
 mdurl==0.1.2
-mediapipe==0.10.21
+mediapipe
 ml_dtypes==0.5.3
 numpy==1.26.4
 opencv-contrib-python==4.11.0.86

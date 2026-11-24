@@ -1,12 +1,20 @@
+"""Bucle principal del juego: cámara, MediaPipe, estados y pantalla.
+
+La lógica de los ejercicios vive en movimientos.py.
+"""
 import sys
+import time
+
 import cv2
 import mediapipe as mp
 import numpy as np
-import time
-from config import config
 
+from config import config  # se usa solo config.model_path
+from movimientos import siguiente_movimiento
 
-# Configuración de la tarea
+# ---------------------------------------------------------------------------
+# Configuración de MediaPipe
+# ---------------------------------------------------------------------------
 BaseOptions = mp.tasks.BaseOptions
 PoseLandmarker = mp.tasks.vision.PoseLandmarker
 PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
@@ -16,131 +24,120 @@ POSE_CONNECTIONS = mp.tasks.vision.PoseLandmarksConnections.POSE_LANDMARKS
 options = PoseLandmarkerOptions(
     base_options=BaseOptions(model_asset_path=config.model_path),
     running_mode=VisionRunningMode.VIDEO,
-    num_poses=1
+    num_poses=1,
 )
 
-# L2 Norm entre la mano y el punto objetivo (azul) 
-def calculate_distance(point1, point2) -> float:
-    distance = np.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
-    return distance
+DURACION_JUEGO = 30  # segundos
 
-# Crea una nueva capa y una posición random para el objetivo
-def new_circle(padding) -> None:
-    global circle_layer, random_circle_position
-    circle_layer =  np.zeros((int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), 3), dtype=np.uint8)
-    random_circle_position = (np.random.randint(padding, circle_layer.shape[1]-padding), np.random.randint(padding, circle_layer.shape[0]-padding))
 
-# Inicializar landmarker
-with PoseLandmarker.create_from_options(options) as landmarker:
-    cap = cv2.VideoCapture(0)  # Abrir cámara
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps == 0:  # seguridad si la cámara no da fps
-        fps = 30
+# ---------------------------------------------------------------------------
+# Dibujo
+# ---------------------------------------------------------------------------
+def dibujar_esqueleto(frame, landmarks):
+    h, w, _ = frame.shape
+    for conexion in POSE_CONNECTIONS:
+        a, b = landmarks[conexion.start], landmarks[conexion.end]
+        cv2.line(frame, (int(a.x * w), int(a.y * h)), (int(b.x * w), int(b.y * h)),
+                 (255, 0, 0), 2)
+    for p in landmarks:
+        cv2.circle(frame, (int(p.x * w), int(p.y * h)), 3, (0, 255, 0), -1)
 
-    
 
-    frame_ms = int(1000 / fps)
+def texto_centrado(frame, texto, y, escala=1.0, color=(0, 255, 0), grosor=2):
+    h, w, _ = frame.shape
+    (tw, _), _ = cv2.getTextSize(texto, cv2.FONT_HERSHEY_SIMPLEX, escala, grosor)
+    cv2.putText(frame, texto, ((w - tw) // 2, y), cv2.FONT_HERSHEY_SIMPLEX,
+                escala, color, grosor)
 
-    # Inicializar valores
-    timestamp = start_time = end_time = sum_t = counter = final_counter = 0
 
-    blue_back = np.zeros((int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), 3), dtype=np.uint8)
-    blue_back[:] = (255, 0, 0)
+# ---------------------------------------------------------------------------
+# Bucle principal
+# ---------------------------------------------------------------------------
+def main():
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("No se pudo abrir la cámara")
+        sys.exit(1)
 
-    new_circle(config.padding)
+    estado = "espera"       # espera -> jugando -> fin -> (Enter) jugando ...
+    puntos = 0
+    t_inicio_juego = 0.0
+    movimiento = None
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    t_programa = time.time()
+    ultimo_ts = -1
 
-        # Voltear frame horizontalmente
-        frame = cv2.flip(frame, 1)
+    with PoseLandmarker.create_from_options(options) as landmarker:
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame = cv2.flip(frame, 1)  # efecto espejo
+            h, w, _ = frame.shape
 
-        # Dibuja el circulo random en el frame
-        cv2.circle(circle_layer, random_circle_position, 20, (255, 255, 255), -1)
-        h, w = circle_layer.shape[:2]
-        frame = np.where(circle_layer != 0, blue_back, frame)
+            # --- Detección (MediaPipe espera RGB; OpenCV da BGR) ---
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            ts = int((time.time() - t_programa) * 1000)
+            ts = max(ts, ultimo_ts + 1)  # el timestamp debe ser creciente
+            ultimo_ts = ts
+            result = landmarker.detect_for_video(mp_image, ts)
+            lm = result.pose_landmarks[0] if result.pose_landmarks else None
 
-        # Variables de tiempo
-        t = end_time - start_time
-        sum_t += t
-        start_time = time.time()
+            if lm:
+                dibujar_esqueleto(frame, lm)
 
-        # Convertir frame a formato MediaPipe
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
-
-        # Ejecutar detección
-        result = landmarker.detect_for_video(mp_image, timestamp)
-        timestamp += frame_ms
-
-        # Dibujar landmarks si los hay
-        if result.pose_landmarks:
-            for person_landmarks in result.pose_landmarks:  # para mantener tu estructura
-                h, w, _ = frame.shape
-
-                # Dibuja líneas entre los landmarks
-                for connection in POSE_CONNECTIONS:
-                    start = person_landmarks[connection.start]
-                    end = person_landmarks[connection.end]
-
-                    x1, y1 = int(start.x * w), int(start.y * h)
-                    x2, y2 = int(end.x * w), int(end.y * h)
-
-                    cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-
-                # Dibuja los puntos (landmarks)
-                for idx, landmark in enumerate(person_landmarks):
-                    x, y = int(landmark.x * w), int(landmark.y * h)
-                    cv2.circle(frame, (x, y), 3, (0, 255, 0), -1)
-
-                landmarks_points = [(landmark.x, landmark.y) for landmark in [person_landmarks[19], person_landmarks[20]]]
-                for landmark in landmarks_points:
-                    h, w, _ = frame.shape
-                    x, y = int(landmark[0] * w), int(landmark[1] * h)
-                    if calculate_distance(landmark, (random_circle_position[0]/w, random_circle_position[1]/h)) < 0.05:
-                        counter += 1
-                        sum_t = 0
-                        new_circle(config.padding)
-                        break
-
-        if sum_t > config.circle_time:
-            sum_t = 0
-            new_circle(config.padding)
-        else:
-            radius = int((20 + config.circle_time) - (config.circle_time_radius * (sum_t - config.circle_time)) / config.circle_time)
-            cv2.circle(frame, random_circle_position, radius, (255, 255, 255), 2)
-
-        end_time = time.time()
-
-        # Mostrar tiempo restante de juego y puntos obtenidos
-        cv2.putText(frame, f'Time: {config.game_time:.2f} - Points: {counter}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        
-        config.game_time -= t
-        
-        if config.game_time <= 0:
-            frame = np.zeros((int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), 3), dtype=np.uint8)
-            cv2.putText(frame, f'Score: {final_counter} points', (180, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.putText(frame, f'Press Enter to continue ...', (120, 160), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.putText(frame, f'Press ESC to exit', (180, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 128, 0), 2)
-
-            # Tecla Enter para jugar
-            if cv2.waitKey(1) & 0xFF == 13:
-                config.game_time = 20
-                counter = 0
             
-            # Tecla ESC para salir
-            if cv2.waitKey(1) & 0xFF == 27:
-                sys.exit(0)
-        else:
-            final_counter = counter
+            key = cv2.waitKey(1) & 0xFF
+            if key == 27:  # ESC
+                break
+            
+            # ------------------------- ESTADOS -------------------------
+            if estado == "espera":
+                texto_centrado(frame, "Colocate de cuerpo entero", h // 2 - 30)
+                texto_centrado(frame, "Pulsa ENTER para empezar", h // 2 + 20)
+                if key == 13:
+                    puntos = 0
+                    t_inicio_juego = time.time()
+                    movimiento = siguiente_movimiento()
+                    estado = "jugando"
 
-        # Mostrar resultado
-        cv2.imshow("Pose Landmarker", frame)
+            elif estado == "jugando":
+                restante = DURACION_JUEGO - (time.time() - t_inicio_juego)
 
-        # Tecla ESC para salir
-        if cv2.waitKey(1) & 0xFF == 27:
-            sys.exit(0)
+                if restante <= 0:
+                    estado = "fin"
+                else:
+                    if lm:
+                        if movimiento.verificar(lm):
+                            puntos += 1
+                            movimiento = siguiente_movimiento(movimiento)
+                    else:
+                        texto_centrado(frame, "No te veo: colocate de cuerpo entero",
+                                       h - 30, 0.8, (0, 0, 255))
+
+                    texto_centrado(frame, movimiento.nombre, 50, 1.4, (0, 255, 255), 3)
+                    cv2.putText(frame, f"Puntos: {puntos}", (10, h - 20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(frame, f"Tiempo: {restante:4.1f}", (w - 220, h - 20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+            if estado == "fin":
+                frame = np.zeros_like(frame)  # pantalla en negro
+                texto_centrado(frame, f"Puntos: {puntos}", h // 2 - 20, 1.6, (0, 255, 0), 3)
+                texto_centrado(frame, "ENTER: jugar de nuevo", h // 2 + 50, 0.9)
+                texto_centrado(frame, "ESC: salir", h // 2 + 90, 0.9, (255, 128, 0))
+                if key == 13:
+                    puntos = 0
+                    t_inicio_juego = time.time()
+                    movimiento = siguiente_movimiento()
+                    estado = "jugando"
+
+            cv2.imshow("Juego de ejercicios", frame)
 
     cap.release()
     cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()

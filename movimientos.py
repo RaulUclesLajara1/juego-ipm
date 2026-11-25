@@ -91,8 +91,8 @@ class Sentadilla(Movimiento):
 
     def __init__(self):
         super().__init__()
-        self.margen_arriba = 0.8
-        self.margen_abajo = 0.3
+        self.margen_estirada = 0.8
+        self.margen_doblada = 0.3
 
     def verificar(self, lm):
         visibles = self.visibles(lm, [23,24,25,26,27,28])
@@ -101,11 +101,12 @@ class Sentadilla(Movimiento):
         rodilla = (lm[25].y + lm[26].y) / 2
         tobillo = (lm[27].y + lm[28].y) / 2
         espinilla = tobillo - rodilla
+        distancia = rodilla - cadera
 
         if not visibles:
             return False
-        de_pie = cadera < rodilla - self.margen_arriba*espinilla
-        abajo = cadera >= rodilla - self.margen_abajo*espinilla
+        de_pie = distancia > self.margen_estirada*espinilla
+        abajo = distancia <= self.margen_doblada*espinilla
 
         if self.fase == "inicio" and de_pie:
             self.fase = "listo"
@@ -114,8 +115,64 @@ class Sentadilla(Movimiento):
         return False
 
 
+class BrazosArriba(Movimiento):
+    nombre = "Levanta los brazos"
+
+    def verificar(self, lm):
+        visibles = self.visibles(lm, [0,11,12,15,16])
+
+        if not visibles:
+            return False
+        abajo = lm[15].y > lm[11].y and lm[16].y > lm[12].y
+        arriba = lm[15].y < lm[0].y and lm[16].y < lm[0].y
+
+        if self.fase == "inicio" and abajo:
+            self.fase = "listo"
+        elif self.fase == "listo" and arriba:
+            return True
+        return False
+
+
+class Rodilla(Movimiento):
+
+    def __init__(self, lado):
+        super().__init__()
+        self.nombre = "Levanta la rodilla " + lado
+        if lado == "izquierda":
+            self.lado = [23,25,27]
+            self.otra = [24,26,28]
+        else:
+            self.lado = [24,26,28]
+            self.otra = [23,25,27]
+        self.margen_estirada = 0.8
+        self.margen_doblada = 0.4
+
+    def verificar(self, lm):
+        visibles = self.visibles(lm, self.lado + self.otra)
+
+        cadera = lm[self.lado[0]].y
+        rodilla = lm[self.lado[1]].y
+        cadera_otra = lm[self.otra[0]].y
+        rodilla_otra = lm[self.otra[1]].y
+        espinilla = lm[self.otra[2]].y - rodilla_otra
+        distancia = rodilla - cadera
+        distancia_otra = rodilla_otra - cadera_otra
+
+        if not visibles:
+            return False
+        recta = distancia > self.margen_estirada*espinilla
+        recta_otra = distancia_otra > self.margen_estirada*espinilla
+        levantada = distancia <= self.margen_doblada*espinilla
+
+        if self.fase == "inicio" and recta and recta_otra:
+            self.fase = "listo"
+        elif self.fase == "listo" and levantada and recta_otra:
+            return True
+        return False
+
+
 # Registro de movimientos disponibles en el juego
-MOVIMIENTOS = [Saltar(), TocarPies(), Sentadilla()]
+MOVIMIENTOS = [Saltar(), TocarPies(), Sentadilla(), BrazosArriba(), Rodilla("izquierda"), Rodilla("derecha")]
  
  
 def siguiente_movimiento(actual=None):

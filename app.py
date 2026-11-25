@@ -27,7 +27,8 @@ options = PoseLandmarkerOptions(
     num_poses=1,
 )
 
-DURACION_JUEGO = 30  # segundos
+DURACION_JUEGO = 30   # segundos
+CUENTA_ATRAS = 3      # segundos de cuenta atrás antes de empezar
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +51,14 @@ def texto_centrado(frame, texto, y, escala=1.0, color=(0, 255, 0), grosor=2):
                 escala, color, grosor)
 
 
+def texto_centro_pantalla(frame, texto, escala=1.0, color=(0, 255, 0), grosor=2):
+    """Dibuja el texto centrado tanto en horizontal como en vertical."""
+    h, w, _ = frame.shape
+    (tw, th), _ = cv2.getTextSize(texto, cv2.FONT_HERSHEY_SIMPLEX, escala, grosor)
+    cv2.putText(frame, texto, ((w - tw) // 2, (h + th) // 2),
+                cv2.FONT_HERSHEY_SIMPLEX, escala, color, grosor)
+
+
 # ---------------------------------------------------------------------------
 # Bucle principal
 # ---------------------------------------------------------------------------
@@ -59,9 +68,11 @@ def main():
         print("No se pudo abrir la cámara")
         sys.exit(1)
 
-    estado = "espera"       # espera -> jugando -> fin -> (Enter) jugando ...
+    # espera -> cuenta_atras -> jugando -> fin -> (Enter) cuenta_atras ...
+    estado = "espera"
     puntos = 0
     t_inicio_juego = 0.0
+    t_inicio_cuenta = 0.0
     movimiento = None
 
     t_programa = time.time()
@@ -87,20 +98,32 @@ def main():
             if lm:
                 dibujar_esqueleto(frame, lm)
 
-            
             key = cv2.waitKey(1) & 0xFF
             if key == 27:  # ESC
                 break
-            
+
             # ------------------------- ESTADOS -------------------------
             if estado == "espera":
                 texto_centrado(frame, "Colocate de cuerpo entero", h // 2 - 30)
                 texto_centrado(frame, "Pulsa ENTER para empezar", h // 2 + 20)
                 if key == 13:
+                    t_inicio_cuenta = time.time()
+                    estado = "cuenta_atras"
+
+            elif estado == "cuenta_atras":
+                transcurrido = time.time() - t_inicio_cuenta
+                restante_cuenta = CUENTA_ATRAS - transcurrido
+
+                if restante_cuenta <= 0:
+                    # Termina la cuenta atrás: empieza el juego
                     puntos = 0
                     t_inicio_juego = time.time()
                     movimiento = siguiente_movimiento()
                     estado = "jugando"
+                else:
+                    numero = int(restante_cuenta) + 1  # 3, 2, 1
+                    texto_centrado(frame, "Preparate...", h // 2 - 120, 1.0, (0, 255, 255))
+                    texto_centro_pantalla(frame, str(numero), 8.0, (0, 255, 255), 12)
 
             elif estado == "jugando":
                 restante = DURACION_JUEGO - (time.time() - t_inicio_juego)
@@ -128,10 +151,8 @@ def main():
                 texto_centrado(frame, "ENTER: jugar de nuevo", h // 2 + 50, 0.9)
                 texto_centrado(frame, "ESC: salir", h // 2 + 90, 0.9, (255, 128, 0))
                 if key == 13:
-                    puntos = 0
-                    t_inicio_juego = time.time()
-                    movimiento = siguiente_movimiento()
-                    estado = "jugando"
+                    t_inicio_cuenta = time.time()
+                    estado = "cuenta_atras"
 
             cv2.imshow("Juego de ejercicios", frame)
 

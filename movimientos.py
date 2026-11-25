@@ -61,6 +61,7 @@ class TocarPies(Movimiento):
                 return True
         
         return False
+
 class Saltar(Movimiento):
     nombre = "Salta"
     
@@ -85,10 +86,36 @@ class Saltar(Movimiento):
                 return True
         return False
             
-            
+class Sentadilla(Movimiento):
+    nombre = "Haz una sentadilla"
+
+    def __init__(self):
+        super().__init__()
+        self.margen_arriba = 0.8
+        self.margen_abajo = 0.3
+
+    def verificar(self, lm):
+        visibles = self.visibles(lm, [23,24,25,26,27,28])
+
+        cadera = (lm[23].y + lm[24].y) / 2
+        rodilla = (lm[25].y + lm[26].y) / 2
+        tobillo = (lm[27].y + lm[28].y) / 2
+        espinilla = tobillo - rodilla
+
+        if not visibles:
+            return False
+        de_pie = cadera < rodilla - self.margen_arriba*espinilla
+        abajo = cadera >= rodilla - self.margen_abajo*espinilla
+
+        if self.fase == "inicio" and de_pie:
+            self.fase = "listo"
+        elif self.fase == "listo" and abajo:
+            return True
+        return False
+
 
 # Registro de movimientos disponibles en el juego
-MOVIMIENTOS = [Saltar(), TocarPies()]
+MOVIMIENTOS = [Saltar(), TocarPies(), Sentadilla()]
  
  
 def siguiente_movimiento(actual=None):

@@ -135,17 +135,22 @@ class BrazosArriba(Movimiento):
 
 class Rodilla(Movimiento):
 
-    def __init__(self, lado):
+    def __init__(self):
         super().__init__()
-        self.nombre = "Levanta la rodilla " + lado
-        if lado == "izquierda":
-            self.lado = [23,25,27]
-            self.otra = [24,26,28]
-        else:
-            self.lado = [24,26,28]
-            self.otra = [23,25,27]
         self.margen_estirada = 0.8
         self.margen_doblada = 0.4
+        self.reset()
+
+    def reset(self):
+        super().reset()
+        lado = random.choice(["izquierda", "derecha"])
+        self.nombre = "Levanta la rodilla " + lado
+        if lado == "izquierda":
+            self.lado = [24,26,28]
+            self.otra = [23,25,27]
+        else:
+            self.lado = [23,25,27]
+            self.otra = [24,26,28]
 
     def verificar(self, lm):
         visibles = self.visibles(lm, self.lado + self.otra)
@@ -172,7 +177,7 @@ class Rodilla(Movimiento):
 
 
 # Registro de movimientos disponibles en el juego
-MOVIMIENTOS = [Saltar(), TocarPies(), Sentadilla(), BrazosArriba(), Rodilla("izquierda"), Rodilla("derecha")]
+MOVIMIENTOS = [Saltar(), TocarPies(), Sentadilla(), BrazosArriba(), Rodilla()]
  
  
 def siguiente_movimiento(actual=None):

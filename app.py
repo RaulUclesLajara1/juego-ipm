@@ -68,6 +68,9 @@ def main():
         print("No se pudo abrir la cámara")
         sys.exit(1)
 
+    cv2.namedWindow("Juego de ejercicios", cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty("Juego de ejercicios", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
     # espera -> cuenta_atras -> jugando -> fin -> (Enter) cuenta_atras ...
     estado = "espera"
     puntos = 0

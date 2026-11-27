@@ -46,7 +46,7 @@ class TocarPies(Movimiento):
     def verificar(self,lm):
         visibles = self.visibles(lm, [27,28,15,16,25,26])
         
-        de_pie = visibles and (lm[15].y < lm[25].y or lm[16].y < lm[16].y)
+        de_pie = visibles and (lm[15].y < lm[25].y or lm[16].y < lm[26].y)
         
 
         if self.fase == "inicio" and de_pie:

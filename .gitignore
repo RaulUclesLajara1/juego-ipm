@@ -1,3 +1,4 @@
 *.task
 mp_env/
 mensaje_raul.md
+__pycache__/
